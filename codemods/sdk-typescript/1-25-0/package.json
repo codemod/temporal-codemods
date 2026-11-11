@@ -1,5 +1,5 @@
 {
-  "name": "temporalio-sdk-1-24-to-1-25",
+  "name": "temporal-ts-sdk-1-24-to-1-25",
   "version": "0.1.0",
   "description": "Migrate @temporalio/* TypeScript SDK from 1.24 to 1.25 (Nexus waitForStage + createEventGroup id-first)",
   "packageManager": "npm@10.x",

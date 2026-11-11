@@ -1,4 +1,4 @@
-# temporalio-sdk-1-24-to-1-25
+# temporal-ts-sdk-1-24-to-1-25
 
 Multi-step Codemod workflow for **@temporalio/\*** (sdk-typescript) **1.24 → 1.25**.
 
@@ -23,7 +23,7 @@ Runs two sequential JSSG steps (`semantic_analysis: file`):
 ## Usage
 
 ```bash
-npx codemod temporalio-sdk-1-24-to-1-25 --target .
+npx codemod temporal-ts-sdk-1-24-to-1-25 --target .
 ```
 
 ## Out of scope / manual
