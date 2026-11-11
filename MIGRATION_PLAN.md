@@ -2,6 +2,8 @@
 
 - Author: alexbit-codemod <alex@codemod.com>
 - Registry: access=public, visibility=public
+- Layout: `codemods/<sdk>/<target-version>/`
+- Path: `codemods/sdk-typescript/1-25-0/`
 - Sources:
   - https://github.com/temporalio/sdk-typescript/releases/tag/v1.25.0
   - https://github.com/temporalio/sdk-typescript/compare/v1.24.0...v1.25.0
