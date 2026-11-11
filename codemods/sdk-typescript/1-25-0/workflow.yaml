@@ -12,6 +12,7 @@ nodes:
           js_file: scripts/codemod.ts
           base_path: "."
           language: "typescript"
+          semantic_analysis: file
           include:
             - "**/*.{ts,tsx,mts,cts}"
           exclude:
@@ -24,6 +25,7 @@ nodes:
           js_file: scripts/create-event-group-id-first.ts
           base_path: "."
           language: "typescript"
+          semantic_analysis: file
           include:
             - "**/*.{ts,tsx,mts,cts}"
           exclude:

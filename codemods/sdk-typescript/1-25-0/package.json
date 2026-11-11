@@ -13,5 +13,8 @@
   "devDependencies": {
     "@codemod.com/jssg-types": "latest",
     "typescript": "latest"
+  },
+  "dependencies": {
+    "@jssg/utils": "latest"
   }
 }

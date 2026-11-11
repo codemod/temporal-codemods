@@ -1,5 +1,7 @@
-import type { Codemod, SgNode } from "codemod:ast-grep";
+import type { Codemod, Edit, SgNode } from "codemod:ast-grep";
 import type TS from "codemod:ast-grep/langs/typescript";
+import { getAllImports, listImports, updateImport } from "@jssg/utils/javascript/imports";
+import { importBindingOf, renameReferences } from "@jssg/utils/javascript/bindings";
 
 /**
  * Temporal sdk-typescript 1.24 → 1.25
@@ -8,51 +10,120 @@ import type TS from "codemod:ast-grep/langs/typescript";
  * EventGroupMarker → EventGroup
  *
  * Single-argument createEventGroup('x') is left unchanged (string is now the id).
+ * Only rewrites symbols imported from @temporalio/workflow (or a subpath).
  */
 type Lang = TS;
 
-const codemod: Codemod<Lang> = (root) => {
-  const rootNode = root.root();
-  const edits: ReturnType<SgNode<Lang>["replace"]>[] = [];
+function isWorkflowSource(source: string): boolean {
+  return (
+    source === "@temporalio/workflow" || source.startsWith("@temporalio/workflow/")
+  );
+}
 
-  // Exact old shape with id option
-  for (const node of rootNode.findAll({
-    rule: { pattern: "createEventGroup($LABEL, { id: $ID })" },
-  })) {
-    const label = node.getMatch("LABEL")?.text();
-    const id = node.getMatch("ID")?.text();
-    if (!label || !id) continue;
-    edits.push(node.replace(`createEventGroup(${id}, { label: ${label} })`));
+function workflowModuleSources(rootNode: SgNode<Lang, "program">): string[] {
+  const sources = new Set<string>();
+  for (const item of listImports(rootNode)) {
+    if (isWorkflowSource(item.source)) sources.add(item.source);
   }
+  return [...sources];
+}
 
-  // Also handle trailing commas / extra spacing via object metavariable fallback
-  for (const node of rootNode.findAll({
-    rule: {
-      pattern: "createEventGroup($LABEL, $OPTS)",
-      not: { pattern: "createEventGroup($LABEL, { id: $ID })" },
-    },
-  })) {
-    const label = node.getMatch("LABEL");
-    const opts = node.getMatch("OPTS");
-    if (!label || !opts || opts.kind() !== "object") continue;
-    if (opts.find({ rule: { pattern: "label: $L" } })) continue;
-    const idPair = opts.find({ rule: { pattern: "id: $ID" } });
-    const id = idPair?.getMatch("ID")?.text();
-    if (!id) continue;
-    edits.push(
-      node.replace(`createEventGroup(${id}, { label: ${label.text()} })`),
+function isCreateEventGroupCallee(callee: SgNode<Lang>): boolean {
+  if (callee.kind() === "identifier") {
+    const binding = importBindingOf(callee);
+    return (
+      binding !== null &&
+      binding.importedName === "createEventGroup" &&
+      isWorkflowSource(binding.source)
     );
   }
 
-  for (const node of rootNode.findAll({
-    rule: {
-      any: [
-        { kind: "identifier", regex: "^EventGroupMarker$" },
-        { kind: "type_identifier", regex: "^EventGroupMarker$" },
-      ],
-    },
-  })) {
-    edits.push(node.replace("EventGroup"));
+  if (callee.kind() === "member_expression") {
+    const object = callee.field("object");
+    const property = callee.field("property");
+    if (!object || !property || property.text() !== "createEventGroup") return false;
+    if (object.kind() !== "identifier") return false;
+    const binding = importBindingOf(object);
+    return (
+      binding !== null && binding.importedName === "*" && isWorkflowSource(binding.source)
+    );
+  }
+
+  return false;
+}
+
+function objectPairs(opts: SgNode<Lang>): Array<{ key: string; value: SgNode<Lang> }> {
+  const pairs: Array<{ key: string; value: SgNode<Lang> }> = [];
+  for (const child of opts.children()) {
+    if (child.kind() !== "pair") continue;
+    const keyNode = child.field("key");
+    const valueNode = child.field("value");
+    if (!keyNode || !valueNode) continue;
+    pairs.push({ key: keyNode.text(), value: valueNode });
+  }
+  return pairs;
+}
+
+function rewriteLabeledCall(
+  node: SgNode<Lang>,
+  calleeText: string,
+): ReturnType<SgNode<Lang>["replace"]> | null {
+  const args = node.field("arguments");
+  if (!args) return null;
+  const argNodes = args.children().filter((child) => {
+    const kind = child.kind();
+    return kind !== "(" && kind !== ")" && kind !== ",";
+  });
+  if (argNodes.length !== 2) return null;
+
+  const [labelArg, optsArg] = argNodes;
+  if (!labelArg || !optsArg || optsArg.kind() !== "object") return null;
+
+  const pairs = objectPairs(optsArg);
+  if (pairs.some((pair) => pair.key === "label")) return null;
+  const idPair = pairs.find((pair) => pair.key === "id");
+  if (!idPair) return null;
+
+  return node.replace(
+    `${calleeText}(${idPair.value.text()}, { label: ${labelArg.text()} })`,
+  );
+}
+
+const codemod: Codemod<Lang> = (root) => {
+  const rootNode = root.root();
+  const filename = root.filename();
+  const edits: Edit[] = [];
+  const sources = workflowModuleSources(rootNode);
+
+  for (const call of rootNode.findAll({ rule: { kind: "call_expression" } })) {
+    const callee = call.field("function");
+    if (!callee || !isCreateEventGroupCallee(callee)) continue;
+    const rewritten = rewriteLabeledCall(call, callee.text());
+    if (rewritten) edits.push(rewritten);
+  }
+
+  for (const from of sources) {
+    const markerImports = getAllImports(rootNode, {
+      type: "named",
+      name: "EventGroupMarker",
+      from,
+    });
+    for (const marker of markerImports) {
+      if (marker.isNamespace) continue;
+      edits.push(...renameReferences(marker.node, "EventGroup", filename));
+      const renamed = updateImport(rootNode, {
+        type: "named",
+        from,
+        specifiers: [
+          {
+            name: "EventGroupMarker",
+            to: "EventGroup",
+            local: marker.alias,
+          },
+        ],
+      });
+      if (renamed) edits.push(...renamed);
+    }
   }
 
   if (edits.length === 0) return null;
