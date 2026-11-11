@@ -11,12 +11,14 @@ Runs two sequential JSSG steps (`semantic_analysis: file`):
 1. **Nexus Workflow Updates** — in files that import `@temporalio/nexus` (or a subpath), require `waitForStage: 'ACCEPTED'`:
    - `handle.update(def)` → `handle.update(def, { waitForStage: 'ACCEPTED' })`
    - `handle.update(def, { ... })` without `waitForStage` → inserts it (quote style from `@jssg/utils` `getFileStyle`)
+   - Metric: `nexus-update-wait-for-stage` with cardinality `shape=no-options|existing-options`
 2. **Event Groups** — only for symbols bound to `@temporalio/workflow` (or a subpath), via `@jssg/utils` `importBindingOf` / `renameReferences` / `updateImport`:
    - `createEventGroup('label', { id: 'gid' })` → `createEventGroup('gid', { label: 'label' })`
    - Aliased and namespace calls (`makeGroup(...)`, `wf.createEventGroup(...)`)
    - `EventGroupMarker` → `EventGroup`
    - Single-argument `createEventGroup('aaa')` is left unchanged (the string is now the id)
    - Same-named APIs from other packages are left alone
+   - Metric: `create-event-group-migration` with cardinality `kind=call-rewrite|type-rename` plus `callee` / `importStyle`
 
 ## Usage
 

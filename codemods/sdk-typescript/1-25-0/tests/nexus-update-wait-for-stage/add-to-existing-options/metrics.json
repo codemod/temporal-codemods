@@ -1,0 +1,10 @@
+{
+  "nexus-update-wait-for-stage": [
+    {
+      "cardinality": {
+        "shape": "existing-options"
+      },
+      "count": 1
+    }
+  ]
+}

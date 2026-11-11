@@ -1,5 +1,6 @@
 import type { Codemod, Edit, SgNode } from "codemod:ast-grep";
 import type TS from "codemod:ast-grep/langs/typescript";
+import { useMetricAtom } from "codemod:metrics";
 import { getAllImports, listImports, updateImport } from "@jssg/utils/javascript/imports";
 import { importBindingOf, renameReferences } from "@jssg/utils/javascript/bindings";
 
@@ -13,6 +14,8 @@ import { importBindingOf, renameReferences } from "@jssg/utils/javascript/bindin
  * Only rewrites symbols imported from @temporalio/workflow (or a subpath).
  */
 type Lang = TS;
+
+const eventGroupMetric = useMetricAtom("create-event-group-migration");
 
 function isWorkflowSource(source: string): boolean {
   return (
@@ -28,28 +31,35 @@ function workflowModuleSources(rootNode: SgNode<Lang, "program">): string[] {
   return [...sources];
 }
 
-function isCreateEventGroupCallee(callee: SgNode<Lang>): boolean {
+function isCreateEventGroupCallee(callee: SgNode<Lang>): "identifier" | "namespace" | null {
   if (callee.kind() === "identifier") {
     const binding = importBindingOf(callee);
-    return (
+    if (
       binding !== null &&
       binding.importedName === "createEventGroup" &&
       isWorkflowSource(binding.source)
-    );
+    ) {
+      return "identifier";
+    }
+    return null;
   }
 
   if (callee.kind() === "member_expression") {
     const object = callee.field("object");
     const property = callee.field("property");
-    if (!object || !property || property.text() !== "createEventGroup") return false;
-    if (object.kind() !== "identifier") return false;
+    if (!object || !property || property.text() !== "createEventGroup") return null;
+    if (object.kind() !== "identifier") return null;
     const binding = importBindingOf(object);
-    return (
-      binding !== null && binding.importedName === "*" && isWorkflowSource(binding.source)
-    );
+    if (
+      binding !== null &&
+      binding.importedName === "*" &&
+      isWorkflowSource(binding.source)
+    ) {
+      return "namespace";
+    }
   }
 
-  return false;
+  return null;
 }
 
 function objectPairs(opts: SgNode<Lang>): Array<{ key: string; value: SgNode<Lang> }> {
@@ -97,9 +107,13 @@ const codemod: Codemod<Lang> = (root) => {
 
   for (const call of rootNode.findAll({ rule: { kind: "call_expression" } })) {
     const callee = call.field("function");
-    if (!callee || !isCreateEventGroupCallee(callee)) continue;
+    if (!callee) continue;
+    const form = isCreateEventGroupCallee(callee);
+    if (!form) continue;
     const rewritten = rewriteLabeledCall(call, callee.text());
-    if (rewritten) edits.push(rewritten);
+    if (!rewritten) continue;
+    edits.push(rewritten);
+    eventGroupMetric.increment({ kind: "call-rewrite", callee: form });
   }
 
   for (const from of sources) {
@@ -110,6 +124,7 @@ const codemod: Codemod<Lang> = (root) => {
     });
     for (const marker of markerImports) {
       if (marker.isNamespace) continue;
+      const before = edits.length;
       edits.push(...renameReferences(marker.node, "EventGroup", filename));
       const renamed = updateImport(rootNode, {
         type: "named",
@@ -123,6 +138,12 @@ const codemod: Codemod<Lang> = (root) => {
         ],
       });
       if (renamed) edits.push(...renamed);
+      if (edits.length > before) {
+        eventGroupMetric.increment({
+          kind: "type-rename",
+          importStyle: marker.isTypeOnly ? "type" : "value",
+        });
+      }
     }
   }
 

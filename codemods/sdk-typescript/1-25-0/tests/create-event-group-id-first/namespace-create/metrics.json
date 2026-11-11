@@ -1,0 +1,11 @@
+{
+  "create-event-group-migration": [
+    {
+      "cardinality": {
+        "callee": "namespace",
+        "kind": "call-rewrite"
+      },
+      "count": 1
+    }
+  ]
+}

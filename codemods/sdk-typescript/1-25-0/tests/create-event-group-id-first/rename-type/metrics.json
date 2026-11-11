@@ -1,0 +1,18 @@
+{
+  "create-event-group-migration": [
+    {
+      "cardinality": {
+        "callee": "identifier",
+        "kind": "call-rewrite"
+      },
+      "count": 1
+    },
+    {
+      "cardinality": {
+        "importStyle": "type",
+        "kind": "type-rename"
+      },
+      "count": 1
+    }
+  ]
+}

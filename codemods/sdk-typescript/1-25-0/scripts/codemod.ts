@@ -1,5 +1,6 @@
 import type { Codemod, SgNode } from "codemod:ast-grep";
 import type TS from "codemod:ast-grep/langs/typescript";
+import { useMetricAtom } from "codemod:metrics";
 import { listImports } from "@jssg/utils/javascript/imports";
 import { getFileStyle } from "@jssg/utils/javascript/style";
 
@@ -10,6 +11,8 @@ import { getFileStyle } from "@jssg/utils/javascript/style";
  * Only touches files that import from @temporalio/nexus (or a subpath).
  */
 type Lang = TS;
+
+const nexusUpdateMetric = useMetricAtom("nexus-update-wait-for-stage");
 
 function importsTemporalNexus(rootNode: SgNode<Lang, "program">): boolean {
   return listImports(rootNode).some(
@@ -71,6 +74,7 @@ const codemod: Codemod<Lang> = (root) => {
           `${object.text()}.update(${def}, { waitForStage: ${quote}ACCEPTED${quote} })`,
         ),
       );
+      nexusUpdateMetric.increment({ shape: "no-options" });
       continue;
     }
 
@@ -84,6 +88,7 @@ const codemod: Codemod<Lang> = (root) => {
         `${object.text()}.update(${def.text()}, ${withWaitForStage(opts.text(), quote)})`,
       ),
     );
+    nexusUpdateMetric.increment({ shape: "existing-options" });
   }
 
   if (edits.length === 0) return null;
