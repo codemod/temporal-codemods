@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/codemod/codemod/refs/heads/main/schemas/workflow.json
+
+version: "1"
+
+nodes:
+  - id: migrate-temporal-sdk-1-25
+    name: Migrate Temporal TypeScript SDK 1.24 → 1.25
+    type: automatic
+    steps:
+      - name: "Require waitForStage ACCEPTED on Nexus Workflow Updates"
+        js-ast-grep:
+          js_file: scripts/codemod.ts
+          base_path: "."
+          language: "typescript"
+          include:
+            - "**/*.{ts,tsx,mts,cts}"
+          exclude:
+            - "**/node_modules/**"
+            - "**/dist/**"
+            - "**/build/**"
+
+      - name: "Migrate createEventGroup to id-first and rename EventGroupMarker"
+        js-ast-grep:
+          js_file: scripts/create-event-group-id-first.ts
+          base_path: "."
+          language: "typescript"
+          include:
+            - "**/*.{ts,tsx,mts,cts}"
+          exclude:
+            - "**/node_modules/**"
+            - "**/dist/**"
+            - "**/build/**"
