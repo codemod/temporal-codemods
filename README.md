@@ -16,4 +16,4 @@ Each target-version folder is a Codemod package (`codemod.yaml`, `workflow.yaml`
 
 | Path | Registry name | Migration |
 | --- | --- | --- |
-| `codemods/sdk-typescript/1-25-0` | `temporalio-sdk-1.24-to-1.25` | TypeScript SDK 1.24 → 1.25 |
+| `codemods/sdk-typescript/1-25-0` | `temporalio-sdk-1-24-to-1-25` | TypeScript SDK 1.24 → 1.25 |
